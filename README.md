@@ -9,4 +9,4 @@ reboot to mitigate cold-boot attacks.
 git clone https://github.com/estevanbelnomo/ram-wipe-hook.git
 cd ram-wipe-hook
 sudo ./install.sh
-
+```

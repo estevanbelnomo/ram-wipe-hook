@@ -3,7 +3,8 @@
 
 # Assertion helpers
 assertEquals() {
-  local expected=$1 actual=$2
+  local expected=$1
+  local actual=$2
   if [ "$expected" != "$actual" ]; then
     echo "expected <$expected> but was <$actual>" >&2
     return 1
@@ -12,8 +13,9 @@ assertEquals() {
 }
 
 assertNotEquals() {
-  local not_expected=$1 actual=$2
-  if [ "$not_expected" == "$actual" ]; then
+  local not_expected=$1
+  local actual=$2
+  if [ "$not_expected" = "$actual" ]; then
     echo "did not expect <$not_expected>" >&2
     return 1
   fi
@@ -27,7 +29,8 @@ fail() {
 
 # Test runner
 _shunit_failed=0
-for test_func in $(declare -F | awk '{print $3}' | grep '^test_'); do
+mapfile -t _shunit_tests < <(declare -F | awk '{print $3}' | grep '^test_')
+for test_func in "${_shunit_tests[@]}"; do
   if command -v setUp >/dev/null; then setUp; fi
   "$test_func"
   rc=$?

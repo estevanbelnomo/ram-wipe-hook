@@ -3,7 +3,7 @@
 # Tests for zz_wipe_ram using a minimal shunit2 framework.
 
 setUp() {
-  TEST_TMPDIR=$(mktemp -d)
+  TEST_TMPDIR="$(mktemp -d)"
   STUB_BIN="$TEST_TMPDIR/bin"
   mkdir -p "$STUB_BIN"
   PATH="$STUB_BIN:$PATH"
@@ -74,4 +74,6 @@ test_already_cleared_ram() {
   assertEquals 0 "$status"
 }
 
+# shellcheck source=tests/shunit2
 . "$(dirname "$0")/shunit2"
+

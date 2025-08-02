@@ -30,6 +30,14 @@ You will need root privileges. Reboot after removing the file to ensure the hook
 - After installation, run `sudo systemctl poweroff` and watch the console for a progress bar indicating the wipe is underway.
 - The script depends on `systemd` and common GNU utilities (`dd`, `nproc`, etc.); ensure they are available on your distribution.
 
+### Automated tests
+
+Run the lightweight test suite with:
+
+```bash
+bash tests/zz_wipe_ram_test.sh
+```
+
 ## Notes
 
 - The wipe is a best-effort process; it cannot guarantee erasure of data in hardware buffers or devices.
@@ -38,3 +46,4 @@ You will need root privileges. Reboot after removing the file to ensure the hook
 ## License
 
 MIT License – see [`LICENSE`](LICENSE).
+

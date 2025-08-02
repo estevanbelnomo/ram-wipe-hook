@@ -1,0 +1,90 @@
+#!/usr/bin/env bash
+# zzzz_99_wipe_ram  –  adaptive RAM wipe at shutdown
+# MIT-licensed – see LICENSE
+
+set -euo pipefail
+
+# systemd passes one argument: halt | poweroff | reboot | kexec
+case "${1:-}" in
+    halt|poweroff|reboot|kexec) ;;   # proceed
+    *) exit 0 ;;                     # ignore anything else
+esac
+
+# ---------------------------------------------------------------------------
+# Dynamic tuning ------------------------------------------------------------
+# ---------------------------------------------------------------------------
+auto_chunk() {                       # decide chunk size from total RAM
+    local total_bytes=$1
+    local gb=$(( total_bytes / 1073741824 ))
+    if   (( gb <= 8 ));   then echo $((128*1024*1024))   # 128 MiB
+    elif (( gb <= 32 ));  then echo $((512*1024*1024))   # 512 MiB
+    else                       echo $((1024*1024*1024))  #   1 GiB
+    fi
+}
+
+auto_threads() {                    # half the cores, min 1 max 8
+    local t=$(nproc --all)
+    (( t = t / 2 ))
+    (( t < 1 )) && t=1
+    (( t > 8 )) && t=8
+    echo "$t"
+}
+
+TOTAL_MEM=$(awk '/MemTotal/ {print $2*1024}' /proc/meminfo)
+CHUNK=$(auto_chunk "$TOTAL_MEM")
+THREADS=$(auto_threads)
+RESERVE=$((1024*1024*1024))         # keep 1 GiB free
+TMP=/run/ramwipe                    # private tmpfs
+
+# ---------------------------------------------------------------------------
+# Console helpers -----------------------------------------------------------
+cols() { stty size </dev/console 2>/dev/null | awk '{print $2+0}' || echo 80; }
+draw_bar() {
+    local done=$1 total=$2 width=$(( $(cols) - 10 ))
+    local pct=$(( done*100/total ))
+    local filled=$(( width*pct/100 ))
+    printf "\r[%-*.*s] %3d%%" "$width" "$filled" "$(printf '%*s' "$width" | tr ' ' '#')" "$pct" >/dev/console
+}
+
+# ---------------------------------------------------------------------------
+# Set up private tmpfs ------------------------------------------------------
+mkdir -p "$TMP"
+mount -t tmpfs -o size=100% tmpfs "$TMP" 2>/dev/null || true
+
+swapoff -a >/dev/null 2>&1 || true      # paranoia: make sure swap is gone
+
+mem_avail() { awk '/MemAvailable/ {print $2*1024}' /proc/meminfo; }
+TOTAL_CHUNKS=$(( ( $(mem_avail) - RESERVE ) / CHUNK ))
+[ "$TOTAL_CHUNKS" -le 0 ] && exit 0     # nothing to wipe
+
+draw_bar 0 "$TOTAL_CHUNKS"
+
+# ---------------------------------------------------------------------------
+# Worker function -----------------------------------------------------------
+worker() {
+    local id=$1 count=$2
+    for ((i=id; i<count; i+=THREADS)); do
+        dd if=/dev/zero of="$TMP/$id.$i" bs=$((CHUNK/1024)) count=1024 status=none
+        echo . >>"$TMP/prog"
+    done
+}
+
+# Launch workers ------------------------------------------------------------
+: >"$TMP/prog"
+for t in $(seq 0 $((THREADS-1))); do
+    worker "$t" "$TOTAL_CHUNKS" &
+done
+
+# Progress monitor ----------------------------------------------------------
+done=0
+while [ "$done" -lt "$TOTAL_CHUNKS" ]; do
+    done=$(wc -c <"$TMP/prog")
+    draw_bar "$done" "$TOTAL_CHUNKS"
+    sleep 0.2
+done
+wait
+printf "\rRAM wipe complete – powering off…\n" >/dev/console
+
+sync
+umount -l "$TMP" 2>/dev/null || true
+exit 0
